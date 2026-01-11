@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-inference
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: inference-api
+        image: <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/aegis-inference:latest
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            cpu: "1"
+            memory: "1Gi"

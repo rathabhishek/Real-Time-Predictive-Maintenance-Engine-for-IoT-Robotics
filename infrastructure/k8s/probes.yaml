@@ -1,0 +1,11 @@
+# Kubernetes Health Checks for High Availability
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 60
+  periodSeconds: 20
+readinessProbe:
+  httpGet:
+    path: /predict_ready
+    port: 8000

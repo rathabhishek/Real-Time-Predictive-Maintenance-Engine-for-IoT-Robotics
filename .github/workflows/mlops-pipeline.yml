@@ -1,0 +1,89 @@
+name: AegisML End-to-End Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ml-models/**'
+      - 'services/inference-api/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Stage 1: Continuous Integration (CI)
+  test-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install pytest tensorflow fastapi uvicorn
+          pip install -r services/inference-api/requirements.txt
+
+      - name: Run Unit Tests
+        # Reflects your experience with JUnit/Mockito for API stability [cite: 13, 15]
+        run: |
+          pytest services/inference-api/tests/
+
+  # Stage 2: Continuous Delivery (CD)
+  build-and-push-ecr:
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, Tag, and Push Image
+        # Multi-stage Docker build as used in your previous microservices [cite: 37]
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: aegis-inference-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./services/inference-api
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  # Stage 3: Continuous Deployment (CD)
+  deploy-to-eks:
+    needs: build-and-push-ecr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Update Kubeconfig
+        # Demonstrates your proficiency with Kubernetes (EKS) [cite: 6, 60]
+        run: |
+          aws eks update-kubeconfig --name AegisML-Production --region us-east-1
+
+      - name: Deploy to EKS
+        # Automating the rollout of the predictive maintenance model
+        run: |
+          kubectl set image deployment/aegis-inference inference-api=${{ secrets.ECR_REGISTRY }}/aegis-inference-api:${{ github.sha }}
+          kubectl rollout status deployment/aegis-inference
